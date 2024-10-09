@@ -26,24 +26,21 @@ fi
 unset LD_LIBRARY_PATH
 export PATH=/bin:/sbin:/usr/bin:/usr/sbin
 
-function remount_rootfs() {
-  echo '[+] Trying to remount root filesystem in read/write mode...'
-  mount -o remount,rw / && return 0 || return $?
-}
-
 function remove_rootfs_verification() {
-  # KERN-A B for arm  ROOT-A B for x64
-  if [[ "$ARCH" =~ "arm64" ]];then
-    /usr/share/vboot/bin/make_dev_ssd.sh --remove_rootfs_verification --partitions 2
-    /usr/share/vboot/bin/make_dev_ssd.sh --remove_rootfs_verification --partitions 4
-  else
-    /usr/share/vboot/bin/make_dev_ssd.sh --remove_rootfs_verification --partitions 3
-    /usr/share/vboot/bin/make_dev_ssd.sh --remove_rootfs_verification --partitions 5
-  fi
+  /usr/share/vboot/bin/make_dev_ssd.sh --remove_rootfs_verification --partitions 2
+  /usr/share/vboot/bin/make_dev_ssd.sh --remove_rootfs_verification --partitions 4
   echo -e "${YELLOW}Please run this script again after reboot.${RESET}"
   echo '[+] Rebooting in 3 seconds...'
   sleep 3
   reboot
+}
+
+function detect_rw() {
+  if [[ $(mount | grep -o '^/ ') == '/ ' ]]; then
+    return 1
+  else
+    return 0
+  fi
 }
 
 if [[ ${EUID} != 0 ]]; then
@@ -56,19 +53,19 @@ if [ -L ${KERNEL_PATH}/vmlinux ]; then
   exit 1
 fi
 
-if ! remount_rootfs; then
+if ! detect_rw; then
   echo -e "${YELLOW}Remount failed. Did you disable rootFS verification?${RESET}" >&2
   read -N1 -p 'Disable rootFS verification now? (This will reboot your system) [Y/n]: ' response < /dev/tty
   echo -e "\n"
 
   case $response in
-  Y|y)
-    remove_rootfs_verification
-  ;;
-  *)
-    echo 'No changes made.'
-    exit 1
-  ;;
+    Y|y)
+      remove_rootfs_verification
+      ;;
+    *)
+      echo 'No changes made.'
+      exit 1
+      ;;
   esac
 fi
 
